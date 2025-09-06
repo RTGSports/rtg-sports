@@ -1,0 +1,9 @@
+{
+  "name": "RTG Sports",
+  "short_name": "RTG",
+  "display": "standalone",
+  "start_url": "/",
+  "background_color": "#0b0b0c",
+  "theme_color": "#111827",
+  "icons": []
+}
