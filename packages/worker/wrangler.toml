@@ -5,5 +5,5 @@ account_id = "2e375e9e5a43135fe37fe5312ff1a71a"
 
 [[kv_namespaces]]
 binding = "RATE_LIMIT"
-id = "KV_ID"
-preview_id = "KV_ID"git 
+id = "33fc4e2204044830a08983173a98764a"
+preview_id = "33fc4e2204044830a08983173a98764a"
