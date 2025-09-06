@@ -2,3 +2,8 @@ name = "rtg-api"
 main = "src/index.ts"
 compatibility_date = "2024-11-07"
 account_id = "2e375e9e5a43135fe37fe5312ff1a71a"
+
+[[kv_namespaces]]
+binding = "RATE_LIMIT"
+id = "KV_ID"
+preview_id = "KV_ID"git 
