@@ -1,0 +1,4 @@
+name = "rtg-api"
+main = "src/index.ts"
+compatibility_date = "2024-11-07"
+account_id = "2e375e9e5a43135fe37fe5312ff1a71a"
