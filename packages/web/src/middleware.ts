@@ -13,7 +13,7 @@ export function middleware(_req: NextRequest) {
   const csp = [
     "default-src 'self'",
     "img-src 'self' https: data:",
-    "style-src 'self' 'unsafe-inline'",
+    "style-src 'self'",
     "script-src 'self'",
     `connect-src 'self' ${WORKER_ORIGIN} ${SUPABASE}`,
     "frame-ancestors 'none'",
