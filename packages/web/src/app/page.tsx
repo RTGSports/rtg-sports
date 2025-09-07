@@ -2,12 +2,10 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { addFavorite, listFavorites, removeFavorite, type Favorite } from "../lib/favorites";
+import { listTeams, type Team } from "../lib/teams";
 
 type Game = { home: string; away: string; status: string; score: string | null };
 type Data = { date: string; leagues: { wnba: Game[]; nwsl: Game[] } };
-
-const WNBA_TEAMS = ["Aces", "Liberty", "Sun", "Lynx"];
-const NWSL_TEAMS = ["Thorns", "Wave", "Gotham", "Current"];
 
 export default function Home() {
   const [msg, setMsg] = useState("loading...");
@@ -23,11 +21,18 @@ export default function Home() {
   const [favs, setFavs] = useState<Favorite[]>([]);
   const [favNote, setFavNote] = useState("");
 
+  // dynamic team lists from Supabase
+  const [wnbaTeams, setWnbaTeams] = useState<Team[]>([]);
+  const [nwslTeams, setNwslTeams] = useState<Team[]>([]);
+  const [teamsNote, setTeamsNote] = useState("");
+
+  // worker calls
   useEffect(() => {
     fetch("/api/hello").then(r => r.json()).then(d => setMsg(d.message)).catch(() => setMsg("offline"));
     fetch("/api/scores/mock").then(r => r.json()).then(setData).catch(() => setData(null));
   }, []);
 
+  // auth + favorites
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       setUserEmail(data.user?.email ?? null);
@@ -39,6 +44,19 @@ export default function Home() {
       else setFavs([]);
     });
     return () => sub.subscription.unsubscribe();
+  }, []);
+
+  // load teams once
+  useEffect(() => {
+    (async () => {
+      try {
+        const [w, n] = await Promise.all([listTeams("wnba"), listTeams("nwsl")]);
+        setWnbaTeams(w);
+        setNwslTeams(n);
+      } catch (e: any) {
+        setTeamsNote(e.message ?? "Failed to load teams");
+      }
+    })();
   }, []);
 
   async function refreshFavs() {
@@ -70,10 +88,11 @@ export default function Home() {
     await supabase.auth.signOut();
   }
 
-  async function onAdd(league: "wnba" | "nwsl", team: string) {
+  // NOTE: we pass team.code as the favorites.team_id for now
+  async function onAdd(league: "wnba" | "nwsl", teamCode: string) {
     setFavNote("");
     try {
-      await addFavorite(league, team);
+      await addFavorite(league, teamCode); // uses existing favorites(team_id text)
       await refreshFavs();
     } catch (e: any) {
       setFavNote(e.message ?? "Failed to add favorite");
@@ -132,16 +151,19 @@ export default function Home() {
       {userEmail && (
         <section className="mt-8 rounded-lg border bg-white p-4 shadow">
           <h2 className="text-lg font-semibold mb-3">Favorites</h2>
+
           <p className="text-xs text-gray-600 mb-2">Pick a team to follow:</p>
+          {teamsNote && <p className="mb-2 text-xs text-red-600">{teamsNote}</p>}
+
           <div className="grid grid-cols-2 gap-2">
-            {WNBA_TEAMS.map(t => (
-              <button key={`w-${t}`} onClick={() => onAdd("wnba", t)} className="rounded border px-2 py-2 text-sm">
-                ⭐ WNBA: {t}
+            {wnbaTeams.map(t => (
+              <button key={`w-${t.code}`} onClick={() => onAdd("wnba", t.code)} className="rounded border px-2 py-2 text-sm">
+                ⭐ WNBA: {t.display_name}
               </button>
             ))}
-            {NWSL_TEAMS.map(t => (
-              <button key={`n-${t}`} onClick={() => onAdd("nwsl", t)} className="rounded border px-2 py-2 text-sm">
-                ⭐ NWSL: {t}
+            {nwslTeams.map(t => (
+              <button key={`n-${t.code}`} onClick={() => onAdd("nwsl", t.code)} className="rounded border px-2 py-2 text-sm">
+                ⭐ NWSL: {t.display_name}
               </button>
             ))}
           </div>
@@ -151,7 +173,7 @@ export default function Home() {
             {favs.length === 0 && <li className="p-3 text-sm text-gray-600">None yet.</li>}
             {favs.map(f => (
               <li key={f.id} className="p-3 flex items-center justify-between">
-                <span className="text-sm">{f.league.toUpperCase()} — {f.team_id}</span>
+                <span className="text-sm">{f.league.toUpperCase()} — {/** team_id for current schema */ (f as any).team_id}</span>
                 <button onClick={() => onRemove(f.id)} className="text-xs text-red-600 hover:underline">remove</button>
               </li>
             ))}

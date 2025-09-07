@@ -1,18 +1,18 @@
 import { supabase } from "./supabase";
 
-export type Favorite = { id: number; league: "wnba" | "nwsl"; team_id: string };
+export type Favorite = { id: number; league: "wnba" | "nwsl"; team_code: string };
 
 export async function listFavorites() {
   const { data, error } = await supabase
     .from("favorites")
-    .select("id, league, team_id")
+    .select("id, league, team_code")
     .order("created_at", { ascending: false });
   if (error) throw error;
   return (data || []) as Favorite[];
 }
 
-export async function addFavorite(league: "wnba" | "nwsl", team_id: string) {
-  const { error } = await supabase.from("favorites").insert({ league, team_id });
+export async function addFavorite(league: "wnba" | "nwsl", team_code: string) {
+  const { error } = await supabase.from("favorites").insert({ league, team_code });
   if (error) throw error;
 }
 
