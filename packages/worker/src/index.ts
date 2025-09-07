@@ -200,3 +200,4 @@ if (url.pathname === "/news") {
     return new Response("Not Found", { status: 404, headers: { "X-RTG-Version": VERSION } });
   }
 } satisfies ExportedHandler<Env>;// trigger
+// trigger
