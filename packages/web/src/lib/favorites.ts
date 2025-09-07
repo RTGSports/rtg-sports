@@ -12,7 +12,11 @@ export async function listFavorites() {
 }
 
 export async function addFavorite(league: "wnba" | "nwsl", team_code: string) {
-  const { error } = await supabase.from("favorites").insert({ league, team_code });
+  const { data: u } = await supabase.auth.getUser();
+  if (!u?.user) throw new Error("Please sign in first.");
+  const { error } = await supabase
+    .from("favorites")
+    .insert({ user_id: u.user.id, league, team_code });
   if (error) throw error;
 }
 

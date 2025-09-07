@@ -173,7 +173,7 @@ export default function Home() {
             {favs.length === 0 && <li className="p-3 text-sm text-gray-600">None yet.</li>}
             {favs.map(f => (
               <li key={f.id} className="p-3 flex items-center justify-between">
-                <span className="text-sm">{f.league.toUpperCase()} — {/** team_id for current schema */ (f as any).team_id}</span>
+                <span className="text-sm">{f.league.toUpperCase()} — {/** team_id for current schema */ (f as any).team_code}</span>
                 <button onClick={() => onRemove(f.id)} className="text-xs text-red-600 hover:underline">remove</button>
               </li>
             ))}
