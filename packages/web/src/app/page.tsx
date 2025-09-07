@@ -19,9 +19,8 @@ export default function Home() {
   const [msg, setMsg] = useState("loading...");
   const [data, setData] = useState<Data | null>(null);
 
-  // Auth
+  // Auth (magic link only)
   const [email, setEmail] = useState("");
-  const [code, setCode] = useState("");
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [authNote, setAuthNote] = useState("");
 
@@ -37,35 +36,75 @@ export default function Home() {
   // News
   const [news, setNews] = useState<NewsItem[]>([]);
   const [newsNote, setNewsNote] = useState("");
+  const [newsTeam, setNewsTeam] = useState<string>("");
 
-  // Worker calls
+  /* ---------------- Worker calls ---------------- */
   useEffect(() => {
-    fetch("/api/hello")
-      .then((r) => r.json())
-      .then((d) => setMsg(d.message))
-      .catch(() => setMsg("offline"));
+  // keep the hello check
+  fetch("/api/hello")
+    .then((r) => r.json())
+    .then((d) => setMsg(d.message))
+    .catch(() => setMsg("offline"));
 
-    fetch("/api/scores/mock")
-      .then((r) => r.json())
-      .then(setData)
-      .catch(() => setData(null));
-  }, []);
+  // NEW: fetch real scores from the Worker (ESPN adapter)
+  (async () => {
+    const today = new Date();
+    const yyyymmdd = today.toISOString().slice(0, 10).replace(/-/g, "");
+    try {
+      const [wResp, nResp] = await Promise.all([
+        fetch(`/api/scores/live?league=wnba&date=${yyyymmdd}`),
+        fetch(`/api/scores/live?league=nwsl&date=${yyyymmdd}`),
+      ]);
+      const [w, n] = await Promise.all([wResp.json(), nResp.json()]);
+      const toGame = (g: any) => ({
+        home: g.home.name,
+        away: g.away.name,
+        status: g.status,
+        score:
+          g.home.score != null && g.away.score != null
+            ? `${g.away.score}-${g.home.score}`
+            : null,
+      });
+      setData({
+        date: today.toISOString(),
+        leagues: {
+          wnba: (w.games || []).map(toGame),
+          nwsl: (n.games || []).map(toGame),
+        },
+      });
+    } catch {
+      setData(null);
+    }
+  })();
+}, []);
 
-  // Auth + favorites bootstrap
+  /* ---------------- Auth bootstrap ---------------- */
   useEffect(() => {
+    // pick up existing session (including after magic-link redirect)
     supabase.auth.getUser().then(({ data }) => {
       setUserEmail(data.user?.email ?? null);
       if (data.user) refreshFavs();
     });
-    const { data: sub } = supabase.auth.onAuthStateChange((_evt, session) => {
-      setUserEmail(session?.user?.email ?? null);
-      if (session?.user) refreshFavs();
-      else setFavs([]);
-    });
-    return () => sub.subscription.unsubscribe();
+
+    // subscribe to auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_evt, session) => {
+        setUserEmail(session?.user?.email ?? null);
+        if (session?.user) refreshFavs();
+        else setFavs([]);
+        // optional: clean up ?code=... from URL after magic-link
+        if (typeof window !== "undefined" && window.location.search.includes("code=")) {
+          const url = new URL(window.location.href);
+          url.searchParams.delete("code");
+          url.searchParams.delete("type");
+          window.history.replaceState({}, "", url.toString());
+        }
+      }
+    );
+    return () => subscription.unsubscribe();
   }, []);
 
-  // Load teams once (public read)
+  /* ---------------- Load teams once ---------------- */
   useEffect(() => {
     (async () => {
       try {
@@ -78,7 +117,7 @@ export default function Home() {
     })();
   }, []);
 
-  // Load news once (WNBA default)
+  /* ---------------- Load news once (WNBA default) ---------------- */
   useEffect(() => {
     (async () => {
       try {
@@ -99,33 +138,30 @@ export default function Home() {
     }
   }
 
-  // Auth actions (OTP)
-  async function sendOtp(e: React.FormEvent) {
+  /* ---------------- Magic link auth ---------------- */
+  async function sendMagicLink(e: React.FormEvent) {
     e.preventDefault();
     setAuthNote("");
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: { shouldCreateUser: true }
-    });
-    setAuthNote(error ? error.message : "Check your email for a 6-digit code.");
-  }
-
-  async function verifyOtp(e: React.FormEvent) {
-    e.preventDefault();
-    setAuthNote("");
-    const { data, error } = await supabase.auth.verifyOtp({
-      email,
-      token: code,
-      type: "email"
-    });
-    setAuthNote(error ? error.message : data.session ? "Signed in!" : "Verified.");
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: {
+          shouldCreateUser: true,
+          emailRedirectTo: typeof window !== "undefined" ? window.location.origin : undefined
+        }
+      });
+      if (error) throw error;
+      setAuthNote("Check your email for the magic link.");
+    } catch (err: any) {
+      setAuthNote(err.message ?? "Failed to send link");
+    }
   }
 
   async function signOut() {
     await supabase.auth.signOut();
   }
 
-  // Favorites actions (uses team_code)
+  /* ---------------- Favorites actions ---------------- */
   async function onAdd(league: "wnba" | "nwsl", teamCode: string) {
     setFavNote("");
     try {
@@ -146,12 +182,27 @@ export default function Home() {
     }
   }
 
-  // News actions
+  /* ---------------- News actions ---------------- */
   async function loadLeagueNews(league: "wnba" | "nwsl") {
     try {
       setNewsNote("");
       setNews([]);
+      setNewsTeam(""); // clear team when switching league
       const r = await fetch(`/api/news?league=${league}`);
+      const j = await r.json();
+      setNews(j.items || []);
+    } catch (e: any) {
+      setNewsNote(e.message ?? "Failed");
+    }
+  }
+
+  async function loadTeamNews(teamCode: string) {
+    try {
+      setNewsNote("");
+      setNews([]);
+      const isW = wnbaTeams.some((t) => t.code === teamCode);
+      const league = isW ? "wnba" : "nwsl";
+      const r = await fetch(`/api/news?league=${league}&team=${teamCode}`);
       const j = await r.json();
       setNews(j.items || []);
     } catch (e: any) {
@@ -188,7 +239,7 @@ export default function Home() {
           </div>
         ) : (
           <div className="space-y-3">
-            <form onSubmit={sendOtp} className="flex gap-2">
+            <form onSubmit={sendMagicLink} className="flex gap-2">
               <input
                 type="email"
                 required
@@ -197,27 +248,13 @@ export default function Home() {
                 onChange={(e) => setEmail(e.target.value)}
                 className="flex-1 rounded border px-3 py-2 text-sm"
               />
-              <button className="rounded bg-gray-900 px-3 py-2 text-white text-sm">
-                Send code
+              <button type="submit" className="rounded bg-gray-900 px-3 py-2 text-white text-sm">
+                Send magic link
               </button>
             </form>
-            <form onSubmit={verifyOtp} className="flex gap-2">
-              <input
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                placeholder="6-digit code"
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
-                className="flex-1 rounded border px-3 py-2 text-sm"
-              />
-              <button className="rounded bg-gray-900 px-3 py-2 text-white text-sm">
-                Verify
-              </button>
-            </form>
+            {!!authNote && <p className="text-xs text-gray-600">{authNote}</p>}
           </div>
         )}
-        {!!authNote && <p className="mt-2 text-xs text-gray-600">{authNote}</p>}
       </section>
 
       {/* Favorites (uses dynamic teams) */}
@@ -226,9 +263,7 @@ export default function Home() {
           <h2 className="text-lg font-semibold mb-3">Favorites</h2>
 
           <p className="text-xs text-gray-600 mb-2">Pick a team to follow:</p>
-          {teamsNote && (
-            <p className="mb-2 text-xs text-red-600">{teamsNote}</p>
-          )}
+          {teamsNote && <p className="mb-2 text-xs text-red-600">{teamsNote}</p>}
 
           <div className="grid grid-cols-2 gap-2">
             {wnbaTeams.map((t) => (
@@ -278,19 +313,40 @@ export default function Home() {
       <section className="mt-8 rounded-lg border bg-white p-4 shadow">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">News</h2>
-          <div className="space-x-2">
-            <button
-              onClick={() => loadLeagueNews("wnba")}
-              className="text-xs underline"
-            >
+          <div className="flex items-center gap-2">
+            <button onClick={() => loadLeagueNews("wnba")} className="text-xs underline">
               WNBA
             </button>
-            <button
-              onClick={() => loadLeagueNews("nwsl")}
-              className="text-xs underline"
-            >
+            <button onClick={() => loadLeagueNews("nwsl")} className="text-xs underline">
               NWSL
             </button>
+
+            <select
+              value={newsTeam}
+              onChange={(e) => {
+                const code = e.target.value;
+                setNewsTeam(code);
+                if (code) loadTeamNews(code);
+              }}
+              className="text-xs border rounded px-2 py-1"
+              title="Filter by team"
+            >
+              <option value="">Team…</option>
+              <optgroup label="WNBA">
+                {wnbaTeams.map((t) => (
+                  <option key={`w-${t.code}`} value={t.code}>
+                    {t.display_name}
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label="NWSL">
+                {nwslTeams.map((t) => (
+                  <option key={`n-${t.code}`} value={t.code}>
+                    {t.display_name}
+                  </option>
+                ))}
+              </optgroup>
+            </select>
           </div>
         </div>
         {newsNote && <p className="mt-1 text-xs text-red-600">{newsNote}</p>}
@@ -305,9 +361,7 @@ export default function Home() {
               >
                 {n.title}
               </a>
-              {n.pubDate && (
-                <div className="text-xs text-gray-500">{n.pubDate}</div>
-              )}
+              {n.pubDate && <div className="text-xs text-gray-500">{n.pubDate}</div>}
             </li>
           ))}
           {news.length === 0 && !newsNote && (
@@ -325,10 +379,7 @@ export default function Home() {
               <h3 className="mb-2 font-medium text-gray-700">WNBA</h3>
               <ul className="divide-y rounded-lg border bg-white">
                 {data.leagues.wnba.map((g, i) => (
-                  <li
-                    key={`w-${i}`}
-                    className="p-3 flex items-center justify-between"
-                  >
+                  <li key={`w-${i}`} className="p-3 flex items-center justify-between">
                     <span>
                       {g.away} @ {g.home}
                     </span>
@@ -343,10 +394,7 @@ export default function Home() {
               <h3 className="mb-2 font-medium text-gray-700">NWSL</h3>
               <ul className="divide-y rounded-lg border bg-white">
                 {data.leagues.nwsl.map((g, i) => (
-                  <li
-                    key={`n-${i}`}
-                    className="p-3 flex items-center justify-between"
-                  >
+                  <li key={`n-${i}`} className="p-3 flex items-center justify-between">
                     <span>
                       {g.away} @ {g.home}
                     </span>
