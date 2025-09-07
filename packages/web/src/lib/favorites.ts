@@ -1,12 +1,19 @@
 import { supabase } from "./supabase";
 
-export type Favorite = { id: number; league: "wnba" | "nwsl"; team_code: string };
+export type Favorite = {
+  id: number;
+  league: "wnba" | "nwsl";
+  team_code: string;
+  team_name?: string;
+};
 
 export async function listFavorites() {
+  // read from the view which includes team_name
   const { data, error } = await supabase
-    .from("favorites")
-    .select("id, league, team_code")
-    .order("created_at", { ascending: false });
+    .from("user_favorites_v")
+    .select("id, league, team_code, team_name")
+    .order("id", { ascending: false });
+
   if (error) throw error;
   return (data || []) as Favorite[];
 }
