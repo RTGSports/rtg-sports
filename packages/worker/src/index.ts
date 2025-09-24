@@ -19,12 +19,36 @@ interface Env {
 
 const VERSION = "rtg-web-apis-v2";
 
+type LeagueKey = "wnba" | "nwsl" | "pwhl";
+
+const NEXT_ORIGINS = new Set([
+  "http://localhost:3000",
+  "https://rtg-sports.vercel.app",
+]);
+
+const ESPN_SCOREBOARD_ENDPOINTS: Record<LeagueKey, string> = {
+  wnba: "https://site.api.espn.com/apis/site/v2/sports/basketball/wnba/scoreboard",
+  nwsl: "https://site.api.espn.com/apis/site/v2/sports/soccer/usa.nwsl/scoreboard",
+  pwhl: "https://site.api.espn.com/apis/site/v2/sports/hockey/women.pwhl/scoreboard",
+};
+
 // ---------- Small helpers ----------
 function json(data: unknown, init?: ResponseInit) {
   return new Response(JSON.stringify(data), {
     headers: { "content-type": "application/json; charset=utf-8" },
     ...init,
   });
+}
+
+function withCors(response: Response, request: Request) {
+  const origin = request.headers.get("Origin");
+  if (origin && NEXT_ORIGINS.has(origin)) {
+    response.headers.set("Access-Control-Allow-Origin", origin);
+  }
+  response.headers.append("Vary", "Origin");
+  response.headers.set("Access-Control-Allow-Methods", "GET,HEAD,OPTIONS");
+  response.headers.set("Access-Control-Allow-Headers", "Content-Type");
+  return response;
 }
 
 async function cachedJSON<T>(
@@ -207,6 +231,27 @@ type RTGGame = {
   link?: string | null;
 };
 
+type ScoreboardTeam = {
+  id: string | null;
+  name: string;
+  shortName: string;
+  abbreviation: string;
+  score: number | null;
+};
+
+type ScoreboardGame = {
+  id: string;
+  league: LeagueKey;
+  startTime: string; // ISO
+  status: {
+    state: string;
+    short: string;
+    detail: string;
+  };
+  home: ScoreboardTeam;
+  away: ScoreboardTeam;
+};
+
 function mapEspnStatus(s: any): { status: string; period?: number; clock?: string | null } {
   const type = s?.type?.state; // "pre" | "in" | "post"
   const period =
@@ -224,6 +269,26 @@ function mapTeamName(team: any) {
   const display =
     team?.team?.displayName || team?.displayName || team?.team?.shortDisplayName || "";
   return { code: abbr, name: display };
+}
+
+function mapScoreboardTeam(competitor: any): ScoreboardTeam {
+  const team = competitor?.team ?? competitor;
+  const name =
+    team?.displayName || team?.shortDisplayName || team?.name || team?.nickname || "";
+  const shortName = team?.shortDisplayName || team?.abbreviation || name;
+  const abbreviation = team?.abbreviation || team?.shortDisplayName || "";
+  return {
+    id: team?.id != null ? String(team.id) : null,
+    name,
+    shortName,
+    abbreviation,
+    score:
+      typeof competitor?.score === "number"
+        ? competitor.score
+        : competitor?.score != null
+        ? Number(competitor.score)
+        : null,
+  };
 }
 
 function normalizeEspnScoreboard(json: any, league: "wnba" | "nwsl"): RTGGame[] {
@@ -265,15 +330,82 @@ function normalizeEspnScoreboard(json: any, league: "wnba" | "nwsl"): RTGGame[] 
   });
 }
 
+function normalizeCompactScoreboard(json: any, league: LeagueKey): ScoreboardGame[] {
+  const events = Array.isArray(json?.events) ? json.events : [];
+  return events.map((ev: any) => {
+    const comp = ev?.competitions?.[0];
+    const competitors = comp?.competitors || [];
+    const homeC = competitors.find((c: any) => c?.homeAway === "home") || competitors[0];
+    const awayC = competitors.find((c: any) => c?.homeAway === "away") || competitors[1];
+    const status = comp?.status?.type || ev?.status?.type || {};
+
+    const state = typeof status?.state === "string" ? status.state : "pre";
+    const short = typeof status?.shortDetail === "string" ? status.shortDetail : "";
+    const detail = typeof status?.detail === "string" ? status.detail : short;
+
+    const startTime = comp?.date || ev?.date || new Date().toISOString();
+
+    return {
+      id: String(ev?.id ?? comp?.id ?? crypto.randomUUID()),
+      league,
+      startTime,
+      status: { state, short, detail },
+      home: mapScoreboardTeam(homeC),
+      away: mapScoreboardTeam(awayC),
+    };
+  });
+}
+
 // ---------- Router ----------
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname;
 
+    if (request.method === "OPTIONS") {
+      return withCors(new Response(null, { status: 204 }), request);
+    }
+
     // Health/version
-    if (path === "/__version") return json({ version: VERSION });
-    if (path === "/hello") return json({ message: "Hello from RTG Sports" });
+    if (path === "/__version") return withCors(json({ version: VERSION }), request);
+    if (path === "/hello") return withCors(json({ message: "Hello from RTG Sports" }), request);
+
+    if (path === "/scoreboard" && (request.method === "GET" || request.method === "HEAD")) {
+      const leagueParam = (url.searchParams.get("league") || "wnba").toLowerCase();
+      const league: LeagueKey = ["wnba", "nwsl", "pwhl"].includes(leagueParam)
+        ? (leagueParam as LeagueKey)
+        : "wnba";
+      const date = url.searchParams.get("date");
+
+      const params = new URLSearchParams();
+      if (date) params.set("dates", date);
+      const espnUrl = `${ESPN_SCOREBOARD_ENDPOINTS[league]}${
+        params.toString() ? `?${params.toString()}` : ""
+      }`;
+
+      try {
+        const espnJson = await fetchJson(espnUrl);
+        const games = normalizeCompactScoreboard(espnJson, league);
+        const hasLiveGame = games.some((g) => g.status.state === "in");
+        const ttl = hasLiveGame ? 30 : 300;
+        const response = json({
+          league,
+          date: date || espnJson?.day?.date || yyyymmdd(),
+          fetchedAt: new Date().toISOString(),
+          games,
+          source: "espn" as const,
+        });
+        response.headers.set("Cache-Control", `public, max-age=${ttl}, s-maxage=${ttl}`);
+        return withCors(response, request);
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : typeof error === "string" ? error : "Unknown error";
+        return withCors(
+          json({ error: "Failed to load scoreboard", league, message }, { status: 502 }),
+          request
+        );
+      }
+    }
 
     // ---- SCORES (ESPN) ----
     // GET /scores/live?league=wnba|nwsl&date=YYYYMMDD
@@ -288,11 +420,12 @@ export default {
           : `https://site.api.espn.com/apis/site/v2/sports/soccer/usa.nwsl/scoreboard?dates=${date}`;
 
       const cacheKey = `scores:${league}:${date}`;
-      return cachedJSON(env, cacheKey, 60, async () => {
+      const result = await cachedJSON(env, cacheKey, 60, async () => {
         const jsonData = await fetchJson(espnUrl);
         const games = normalizeEspnScoreboard(jsonData, league);
         return { league, date, games, source: "espn" as const };
       });
+      return withCors(result, request);
     }
 
     // ---- NEWS (league + optional team feeds from Supabase) ----
@@ -334,7 +467,7 @@ export default {
       }
 
       const cacheKey = `v5:news:${league}:${team || "all"}`;
-      return cachedJSON(env, cacheKey, 300, async () => {
+      const result = await cachedJSON(env, cacheKey, 300, async () => {
         const results = await Promise.allSettled(feeds.map((f) => fetchText(f)));
         const items = results
           .filter((r): r is PromiseFulfilledResult<string> => r.status === "fulfilled")
@@ -342,9 +475,10 @@ export default {
           .slice(0, 50);
         return { league, team, feeds, items };
       });
+      return withCors(result, request);
     }
 
     // 404
-    return json({ message: "Not Found", path }, { status: 404 });
+    return withCors(json({ message: "Not Found", path }, { status: 404 }), request);
   },
 };

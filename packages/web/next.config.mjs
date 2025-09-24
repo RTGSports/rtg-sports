@@ -5,7 +5,7 @@ const nextConfig = {
       ? [
           {
             source: "/api/:path*",
-            destination: "https://rtg-api.alextripp1.workers.dev/:path*"
+            destination: "http://127.0.0.1:8787/:path*"
           }
         ]
       : [];
