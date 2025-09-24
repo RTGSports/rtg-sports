@@ -1,14 +1,30 @@
 {
   "name": "rtg-sports",
   "private": true,
-  "workspaces": ["packages/*"],
   "scripts": {
-    "build": "pnpm -C packages/web build && pnpm -C packages/worker build",
-    "dev": "concurrently -k \"pnpm -C packages/web dev\" \"pnpm -C packages/worker dev\"",
-    "lint": "pnpm -C packages/web lint",
-    "typecheck": "pnpm -C packages/web typecheck"
+    "dev": "next dev -p 3000",
+    "build": "next build",
+    "start": "next start -p 3000",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.57.2",
+    "next": "14.2.5",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "zod": "^3.23.8",
+    "zustand": "^4.5.4"
   },
   "devDependencies": {
-    "concurrently": "^9.0.0"
+    "@types/node": "^20.14.10",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "autoprefixer": "^10.4.20",
+    "eslint": "^9.9.0",
+    "eslint-config-next": "14.2.5",
+    "postcss": "^8.4.41",
+    "tailwindcss": "^3.4.9",
+    "typescript": "^5.5.4"
   }
 }
