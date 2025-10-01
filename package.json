@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "NODE_OPTIONS=--enable-source-maps node --loader ./scripts/ts-node-loader.mjs --test \"tests/**/*.test.ts\" --test \"tests/**/*.test.tsx\"",
+    "test:watch": "NODE_OPTIONS=--enable-source-maps node --loader ./scripts/ts-node-loader.mjs --test --watch \"tests/**/*.test.ts\" --test --watch \"tests/**/*.test.tsx\""
   },
   "dependencies": {
     "next": "14.2.5",
