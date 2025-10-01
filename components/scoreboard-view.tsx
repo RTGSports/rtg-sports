@@ -253,7 +253,7 @@ export function ScoreboardView({ initialLeague = DEFAULT_LEAGUE }: ScoreboardVie
   );
 }
 
-function GameCard({
+export function GameCard({
   game,
   leagueKey,
 }: {
@@ -360,7 +360,7 @@ function GameCard({
   );
 }
 
-function determineHighlight(
+export function determineHighlight(
   subject: TeamScore,
   opponent: TeamScore,
   status: "pre" | "in" | "post"
@@ -462,7 +462,7 @@ function TeamRow({
   );
 }
 
-function withOpacity(hexColor: string, opacity: number): string {
+export function withOpacity(hexColor: string, opacity: number): string {
   const normalized = hexColor.replace("#", "").trim();
 
   if (normalized.length !== 6) {
