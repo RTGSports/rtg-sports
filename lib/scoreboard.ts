@@ -79,7 +79,7 @@ const LIVE_REFRESH_INTERVAL = 30; // seconds
 const DEFAULT_REFRESH_INTERVAL = 180; // seconds
 
 export function mapEspnScoreboard(raw: any, league: LeagueKey): ScoreboardPayload {
-  const events: EspnEvent[] = Array.isArray(raw?.events) ? raw.events : [];
+  const events: EspnEvent[] = dedupeAndSortEvents(Array.isArray(raw?.events) ? raw.events : []);
 
   const games = events
     .map((event) => transformEventToGame(event))
@@ -176,4 +176,52 @@ function normalizeTeam(competitor: EspnCompetitor, homeAway: "home" | "away"): T
 
 function generateFallbackId() {
   return `game-${Math.random().toString(36).slice(2)}-${Date.now()}`;
+}
+
+function dedupeAndSortEvents(events: EspnEvent[]): EspnEvent[] {
+  const seen = new Map<string, EspnEvent>();
+  const withUnknownId: EspnEvent[] = [];
+
+  for (const event of events) {
+    const identifier = getEventIdentifier(event);
+
+    if (!identifier) {
+      withUnknownId.push(event);
+      continue;
+    }
+
+    if (!seen.has(identifier)) {
+      seen.set(identifier, event);
+    }
+  }
+
+  const uniqueEvents = [...seen.values(), ...withUnknownId];
+
+  return uniqueEvents.sort((a, b) => getEventTime(a) - getEventTime(b));
+}
+
+function getEventIdentifier(event: EspnEvent): string | null {
+  const competitionId = event?.competitions?.[0]?.id;
+  if (competitionId) {
+    return `competition:${competitionId}`;
+  }
+
+  const eventId = event?.id;
+  if (eventId) {
+    return `event:${eventId}`;
+  }
+
+  return null;
+}
+
+function getEventTime(event: EspnEvent): number {
+  const rawDate =
+    event?.competitions?.[0]?.date ?? event?.date ?? new Date().toISOString();
+
+  const parsed = Date.parse(rawDate);
+  if (Number.isNaN(parsed)) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  return parsed;
 }
