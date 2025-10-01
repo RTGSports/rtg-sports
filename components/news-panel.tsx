@@ -2,23 +2,15 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-interface NewsArticle {
-  id: string;
-  title: string;
-  summary: string;
-  league: string;
-  publishedAt: string;
-  author: string;
-  url: string;
-}
+import type { NormalizedNewsArticle } from "@/lib/news";
 
 interface NewsResponse {
-  articles: NewsArticle[];
+  articles: NormalizedNewsArticle[];
   refreshInterval: number;
 }
 
 export function NewsPanel() {
-  const [articles, setArticles] = useState<NewsArticle[]>([]);
+  const [articles, setArticles] = useState<NormalizedNewsArticle[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshInterval, setRefreshInterval] = useState<number | null>(null);
@@ -107,7 +99,7 @@ export function NewsPanel() {
   }, [refreshInterval]);
 
   const groupedArticles = useMemo(() => {
-    return articles.reduce<Record<string, NewsArticle[]>>((acc, article) => {
+    return articles.reduce<Record<string, NormalizedNewsArticle[]>>((acc, article) => {
       const key = article.league.toUpperCase();
       if (!acc[key]) {
         acc[key] = [];
@@ -162,7 +154,7 @@ export function NewsPanel() {
                     <article className="space-y-2">
                       <div className="flex items-start justify-between gap-4 text-xs text-muted">
                         <span>{formatRelativeTime(article.publishedAt)}</span>
-                        <span>{article.author}</span>
+                        {article.author ? <span>{article.author}</span> : null}
                       </div>
                       <a
                         href={article.url}
