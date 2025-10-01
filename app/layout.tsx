@@ -1,8 +1,18 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Archivo, Inter, Rajdhani } from "next/font/google";
 import "./globals.css";
 
-const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
+const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
+const archivo = Archivo({
+  subsets: ["latin"],
+  variable: "--font-heading",
+  weight: ["500", "600", "700"],
+});
+const rajdhani = Rajdhani({
+  subsets: ["latin"],
+  variable: "--font-score",
+  weight: ["500", "600", "700"],
+});
 
 export const metadata: Metadata = {
   title: "Raising the Game Scores",
@@ -12,7 +22,11 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className="bg-background text-white">
-      <body className={`${inter.variable} font-sans bg-background text-white antialiased`}>{children}</body>
+      <body
+        className={`${inter.variable} ${archivo.variable} ${rajdhani.variable} font-sans bg-background text-white antialiased`}
+      >
+        {children}
+      </body>
     </html>
   );
 }
