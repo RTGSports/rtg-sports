@@ -27,7 +27,20 @@ const config: Config = {
         muted: "#6b7280"
       },
       fontFamily: {
-        sans: ["var(--font-inter)", "system-ui", "sans-serif"],
+        sans: ["var(--font-sans)", "system-ui", "sans-serif"],
+        heading: [
+          "var(--font-heading)",
+          "var(--font-sans)",
+          "system-ui",
+          "sans-serif",
+        ],
+        score: [
+          "var(--font-score)",
+          "var(--font-heading)",
+          "var(--font-sans)",
+          "system-ui",
+          "sans-serif",
+        ],
       },
       boxShadow: {
         card: "0 18px 40px -24px rgba(168, 85, 247, 0.45)",
