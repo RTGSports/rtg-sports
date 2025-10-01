@@ -7,7 +7,7 @@ export default function HomePage() {
       <div className="mx-auto flex min-h-screen max-w-6xl flex-col gap-12 px-4 pb-16 pt-12 sm:px-6 lg:px-8">
         <header className="space-y-4">
           <p className="text-sm uppercase tracking-[0.35em] text-accent-200">
-            Rise to Greatness
+            Raising the Game
           </p>
           <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">
             Women&apos;s Sports Scoreboard

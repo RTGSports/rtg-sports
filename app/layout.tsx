@@ -5,7 +5,7 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 export const metadata: Metadata = {
-  title: "Rise to Greatness Scores",
+  title: "Raising the Game Scores",
   description: "Live scores across the WNBA, NWSL, and PWHL in one place.",
 };
 

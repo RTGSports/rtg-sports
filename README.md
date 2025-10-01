@@ -1,4 +1,4 @@
-# Rise to Greatness – Women’s Sports Scoreboard
+# Raising the Game – Women’s Sports Scoreboard
 
 A freshly rebuilt Next.js app that surfaces live scores for the WNBA, NWSL, and PWHL using free ESPN endpoints. The project is designed for the MVP outlined in our planning chat and keeps the stack lean so it runs anywhere—including GitHub Codespaces.
 
