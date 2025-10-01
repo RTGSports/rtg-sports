@@ -27,6 +27,23 @@ export async function GET(request: NextRequest) {
     });
 
     if (!response.ok) {
+      if ([204, 404].includes(response.status)) {
+        const payload = mapEspnScoreboard({ events: [] }, leagueKey);
+        const notice =
+          response.status === 204
+            ? "ESPN hasn't published scoreboard data for this league yet today."
+            : "ESPN's scoreboard feed for this league isn't available right now. We'll keep checking for updates.";
+
+        return Response.json(
+          { ...payload, notice },
+          {
+            headers: {
+              "Cache-Control": `public, s-maxage=${payload.refreshInterval}, stale-while-revalidate=60`,
+            },
+          }
+        );
+      }
+
       return Response.json(
         { error: ERROR_MESSAGE, status: response.status },
         { status: 502 }

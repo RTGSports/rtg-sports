@@ -20,6 +20,7 @@ interface ScoreboardResponse {
   games: ScoreboardGame[];
   lastUpdated: string;
   refreshInterval: number;
+  notice?: string;
 }
 
 interface ScoreboardGame {
@@ -239,8 +240,13 @@ export function ScoreboardView({ initialLeague = DEFAULT_LEAGUE }: ScoreboardVie
       )}
 
       {!loading && data?.games?.length === 0 && !error && (
-        <div className="rounded-2xl border border-white/5 bg-surface/60 px-6 py-10 text-center text-sm text-muted">
-          We don&apos;t see any scheduled or live games for {LEAGUES[selectedLeague].label} today.
+        <div className="space-y-3">
+          {data.notice && (
+            <p className="text-center text-sm text-muted">{data.notice}</p>
+          )}
+          <div className="rounded-2xl border border-white/5 bg-surface/60 px-6 py-10 text-center text-sm text-muted">
+            We don&apos;t see any scheduled or live games for {LEAGUES[selectedLeague].label} today.
+          </div>
         </div>
       )}
 
