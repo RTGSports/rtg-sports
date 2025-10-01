@@ -21,6 +21,7 @@ interface ScoreboardResponse {
   lastUpdated: string;
   refreshInterval: number;
   notice?: string;
+  dates?: string[];
 }
 
 interface ScoreboardGame {
@@ -153,6 +154,40 @@ export function ScoreboardView({ initialLeague = DEFAULT_LEAGUE }: ScoreboardVie
     }
   }, [data?.lastUpdated]);
 
+  const dateCoverageLabel = useMemo(() => {
+    if (!data?.dates || data.dates.length === 0) {
+      return null;
+    }
+
+    const formatter = new Intl.DateTimeFormat(undefined, {
+      month: "short",
+      day: "numeric",
+    });
+
+    const normalizedDates = [...data.dates]
+      .sort()
+      .map((value) => {
+        const candidate = value.length === 10 ? `${value}T00:00:00Z` : value;
+        const parsed = new Date(candidate);
+        if (Number.isNaN(parsed.getTime())) {
+          return null;
+        }
+
+        return formatter.format(parsed);
+      })
+      .filter((value): value is string => Boolean(value));
+
+    if (normalizedDates.length === 0) {
+      return null;
+    }
+
+    if (normalizedDates.length === 1) {
+      return normalizedDates[0];
+    }
+
+    return `${normalizedDates[0]} – ${normalizedDates[normalizedDates.length - 1]}`;
+  }, [data?.dates]);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -245,7 +280,9 @@ export function ScoreboardView({ initialLeague = DEFAULT_LEAGUE }: ScoreboardVie
             <p className="text-center text-sm text-muted">{data.notice}</p>
           )}
           <div className="rounded-2xl border border-white/5 bg-surface/60 px-6 py-10 text-center text-sm text-muted">
-            We don&apos;t see any scheduled or live games for {LEAGUES[selectedLeague].label} today.
+            {`We don't see any scheduled or live games for ${LEAGUES[selectedLeague].label}${
+              dateCoverageLabel ? ` from ${dateCoverageLabel}` : ""
+            }.`}
           </div>
         </div>
       )}
