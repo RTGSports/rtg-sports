@@ -1,5 +1,8 @@
 import { DEFAULT_LEAGUE } from "@/lib/leagues";
+import { FavoritesBar } from "@/components/favorites-bar";
+import { NewsPanel } from "@/components/news-panel";
 import { ScoreboardView } from "@/components/scoreboard-view";
+import { NotificationPreferencesPanel } from "@/components/notification-preferences";
 
 export default function HomePage() {
   return (
@@ -18,9 +21,18 @@ export default function HomePage() {
           </p>
         </header>
 
-        <section className="flex-1">
-          <ScoreboardView initialLeague={DEFAULT_LEAGUE} />
-        </section>
+        <div className="flex-1 space-y-10">
+          <div className="grid gap-10 lg:grid-cols-[1.75fr_1fr]">
+            <section className="space-y-8">
+              <ScoreboardView initialLeague={DEFAULT_LEAGUE} />
+              <FavoritesBar />
+              <NotificationPreferencesPanel />
+            </section>
+            <aside>
+              <NewsPanel />
+            </aside>
+          </div>
+        </div>
       </div>
     </main>
   );
