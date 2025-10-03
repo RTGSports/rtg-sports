@@ -44,6 +44,35 @@ The suites currently cover the utilities in `lib/` and the `GameCard` logic from
 
 Every push or pull request targeting `main` runs `.github/workflows/ci.yml`. The workflow installs dependencies with PNPM and enforces formatting by running `pnpm lint` followed by `pnpm test`.
 
+## Progressive Web App
+
+The app now ships with everything required to qualify as a Progressive Web App (PWA):
+
+- A web manifest exposed at `/manifest.webmanifest` that defines the app name, theme colors, install targets, and icons.
+- High-resolution PNG icons (including a maskable variant and an Apple touch icon) in `public/icons/`.
+- A production-only service worker (`public/sw.js`) that pre-caches the shell, keeps assets up to date, and serves a friendly offline fallback page when the network is unavailable.
+
+### Building and testing the PWA locally
+
+Service workers only run in production mode. Follow these steps before committing or deploying changes:
+
+1. Build the app:
+   ```bash
+   pnpm build
+   ```
+2. Start the production server:
+   ```bash
+   pnpm start
+   ```
+3. Open [http://localhost:3000](http://localhost:3000) and run the Lighthouse PWA audit in Chrome DevTools (or use the `Application → Manifest` panel) to verify the install prompt, manifest, and service worker registration.
+
+### Hosting requirements
+
+- PWAs must be served over HTTPS (or from `localhost`). Deploying to Vercel automatically satisfies this.
+- Ensure the `public/` directory is included in deployments so the manifest, icons, offline page, and service worker are available.
+- If you host somewhere other than Vercel, configure caching so that `sw.js` is served with `Cache-Control: no-cache` or a short max-age to allow updates.
+
+
 ## Deployment
 
 Merges to `main` trigger `.github/workflows/deploy.yml`, which builds the Next.js app (`pnpm build`) and hands the output to Vercel for production deployment. Configure the following repository secrets so the action can authenticate securely:
