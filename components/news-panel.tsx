@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import type { NormalizedNewsArticle } from "@/lib/news";
 
@@ -14,8 +14,6 @@ export function NewsPanel() {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshInterval, setRefreshInterval] = useState<number | null>(null);
-  const [isSheetOpen, setIsSheetOpen] = useState(false);
-  const dialogRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -111,102 +109,6 @@ export function NewsPanel() {
     }, {});
   }, [articles]);
 
-  useEffect(() => {
-    if (!isSheetOpen) {
-      return;
-    }
-
-    const dialog = dialogRef.current;
-    if (!dialog) {
-      return;
-    }
-
-    const previouslyFocused = document.activeElement as HTMLElement | null;
-    const focusSelectors = [
-      "a[href]",
-      "button:not([disabled])",
-      "textarea",
-      "input",
-      "select",
-      '[tabindex]:not([tabindex="-1"])',
-    ].join(",");
-
-    const getFocusableElements = () => {
-      return Array.from(dialog.querySelectorAll<HTMLElement>(focusSelectors)).filter(
-        (element) => !element.hasAttribute("disabled") && !element.getAttribute("aria-hidden")
-      );
-    };
-
-    const focusFirstElement = () => {
-      const elements = getFocusableElements();
-      (elements[0] ?? dialog).focus();
-    };
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        setIsSheetOpen(false);
-        return;
-      }
-
-      if (event.key !== "Tab") {
-        return;
-      }
-
-      const elements = getFocusableElements();
-      if (elements.length === 0) {
-        event.preventDefault();
-        dialog.focus();
-        return;
-      }
-
-      const firstElement = elements[0];
-      const lastElement = elements[elements.length - 1];
-
-      if (event.shiftKey) {
-        if (document.activeElement === firstElement) {
-          event.preventDefault();
-          lastElement.focus();
-        }
-        return;
-      }
-
-      if (document.activeElement === lastElement) {
-        event.preventDefault();
-        firstElement.focus();
-      }
-    };
-
-    const handleFocusIn = (event: FocusEvent) => {
-      if (dialog.contains(event.target as Node)) {
-        return;
-      }
-
-      focusFirstElement();
-    };
-
-    focusFirstElement();
-
-    dialog.addEventListener("keydown", handleKeyDown);
-    document.addEventListener("focusin", handleFocusIn);
-    document.body.style.overflow = "hidden";
-
-    return () => {
-      dialog.removeEventListener("keydown", handleKeyDown);
-      document.removeEventListener("focusin", handleFocusIn);
-      document.body.style.removeProperty("overflow");
-      previouslyFocused?.focus?.();
-    };
-  }, [isSheetOpen]);
-
-  const handleOpenSheet = () => {
-    setIsSheetOpen(true);
-  };
-
-  const handleCloseSheet = () => {
-    setIsSheetOpen(false);
-  };
-
   const renderBody = () => {
     return (
       <>
@@ -251,57 +153,9 @@ export function NewsPanel() {
           </h2>
           <span className="text-xs uppercase tracking-[0.35em] text-muted">News Desk</span>
         </div>
-        <button
-          type="button"
-          className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-medium uppercase tracking-[0.35em] text-white transition hover:border-white/20 hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-200 focus-visible:ring-offset-2 focus-visible:ring-offset-surface lg:hidden"
-          onClick={handleOpenSheet}
-        >
-          View Headlines
-        </button>
       </header>
 
-      <div className="hidden space-y-4 lg:block">{renderBody()}</div>
-
-      {isSheetOpen ? (
-        <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 px-4 pb-6 pt-24 sm:pt-32"
-          role="presentation"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) {
-              handleCloseSheet();
-            }
-          }}
-        >
-          <div
-            ref={dialogRef}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="news-panel-dialog-title"
-            className="w-full max-w-lg rounded-t-3xl bg-surface p-6 shadow-2xl outline-none"
-            tabIndex={-1}
-          >
-            <div className="mb-4 flex items-start justify-between gap-4">
-              <div>
-                <h2 id="news-panel-dialog-title" className="text-lg font-semibold">
-                  Latest Headlines
-                </h2>
-                <span className="text-xs uppercase tracking-[0.35em] text-muted">News Desk</span>
-              </div>
-              <button
-                type="button"
-                onClick={handleCloseSheet}
-                className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium uppercase tracking-[0.35em] text-white transition hover:border-white/20 hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-200 focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
-              >
-                Close
-              </button>
-            </div>
-
-            <div className="space-y-4 overflow-y-auto pr-1" style={{ maxHeight: "min(70vh, 32rem)" }}>
-              {renderBody()}
-            </div>
-          </div>
-        </div>
-      ) : null}
+      <div className="space-y-4">{renderBody()}</div>
     </section>
   );
 }
