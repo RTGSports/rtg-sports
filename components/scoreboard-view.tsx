@@ -191,17 +191,19 @@ export function ScoreboardView({ initialLeague = DEFAULT_LEAGUE }: ScoreboardVie
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div
-          className="inline-flex rounded-full border p-1 text-sm shadow-inner backdrop-blur"
-          style={{
-            borderColor: withOpacity(activeBrand.secondaryColor, 0.25),
-            background: `linear-gradient(120deg, ${withOpacity(
-              activeBrand.surfaceColor,
-              0.85
-            )} 0%, rgba(24, 27, 34, 0.7) 100%)`,
-          }}
-        >
-          {leagues.map((league) => {
+        <div className="flex flex-col gap-2 sm:gap-0">
+          <nav className="-mx-4 sm:mx-0" aria-label="Select league scoreboard">
+            <div
+              className="flex snap-x snap-mandatory gap-2 overflow-x-auto rounded-full border px-4 py-1 text-sm shadow-inner backdrop-blur sm:snap-none sm:overflow-visible sm:p-1"
+              style={{
+                borderColor: withOpacity(activeBrand.secondaryColor, 0.25),
+                background: `linear-gradient(120deg, ${withOpacity(
+                  activeBrand.surfaceColor,
+                  0.85
+                )} 0%, rgba(24, 27, 34, 0.7) 100%)`,
+              }}
+            >
+              {leagues.map((league) => {
             const isActive = league.key === selectedLeague;
             const leagueBrand = LEAGUES[league.key].brand;
             const headingFont = leagueBrand.typefaces?.heading ?? "font-heading";
@@ -222,26 +224,46 @@ export function ScoreboardView({ initialLeague = DEFAULT_LEAGUE }: ScoreboardVie
                   color: leagueBrand.secondaryColor,
                 }
               : {};
-            return (
-              <button
-                key={league.key}
-                type="button"
-                onClick={() => setSelectedLeague(league.key)}
-                className={`rounded-full border px-4 py-2 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background ${headingFont}`}
-                style={{
-                  ...inactiveStyles,
-                  ...activeStyles,
-                }}
-                aria-pressed={isActive}
-              >
-                {league.label}
-              </button>
-            );
-          })}
+                return (
+                  <button
+                    key={league.key}
+                    type="button"
+                    onClick={() => setSelectedLeague(league.key)}
+                    className={`min-h-[44px] inline-flex flex-shrink-0 items-center justify-center rounded-full border px-4 py-2.5 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background snap-start ${headingFont}`}
+                    style={{
+                      ...inactiveStyles,
+                      ...activeStyles,
+                    }}
+                    aria-pressed={isActive}
+                  >
+                    {league.label}
+                  </button>
+                );
+              })}
+            </div>
+          </nav>
+          <div
+            className="text-xs sm:hidden"
+            style={{ color: withOpacity(activeBrand.mutedColor, 0.85) }}
+            aria-live="polite"
+          >
+            {isBackgroundRefresh && (
+              <span
+                className="mr-2 inline-flex h-2 w-2 animate-ping rounded-full"
+                style={{ backgroundColor: activeBrand.primaryColor }}
+              />
+            )}
+            {data?.games && (
+              <span>
+                {data.games.length} game{data.games.length === 1 ? "" : "s"} • Updated {lastUpdatedLabel || "just now"}
+              </span>
+            )}
+          </div>
         </div>
         <div
-          className="text-xs"
+          className="hidden text-xs sm:block"
           style={{ color: withOpacity(activeBrand.mutedColor, 0.85) }}
+          aria-live="polite"
         >
           {isBackgroundRefresh && (
             <span
