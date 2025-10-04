@@ -20,7 +20,6 @@ export const metadata: Metadata = {
   title: "Raising the Game Scores",
   description: "Live scores across the WNBA, NWSL, and PWHL in one place.",
   manifest: "/manifest.webmanifest",
-  themeColor: "#0b0e19",
   icons: {
     icon: "/icons/icon-192x192.png",
     apple: "/icons/apple-icon-180x180.png",
@@ -32,6 +31,8 @@ export const metadata: Metadata = {
     title: "RTG Scores",
   },
 };
+
+export const viewport = { themeColor: "#0b0e19" };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
