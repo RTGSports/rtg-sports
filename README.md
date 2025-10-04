@@ -38,7 +38,7 @@ The project uses Node's native test runner with a lightweight TypeScript loader 
   pnpm test:watch
   ```
 
-The suites currently cover the utilities in `lib/` and the `GameCard` logic from the scoreboard view, ensuring rendering helpers stay correct as the UI evolves.
+The suites currently cover the utilities in `lib/`, the `GameCard` logic from the scoreboard view, and a smoke test that verifies cached scoreboard/news content renders when the network is unavailable.
 
 ## Continuous integration
 
@@ -51,6 +51,13 @@ The app now ships with everything required to qualify as a Progressive Web App (
 - A web manifest exposed at `/manifest.webmanifest` that defines the app name, theme colors, install targets, and icons.
 - High-resolution PNG icons (including a maskable variant and an Apple touch icon) in `public/icons/`.
 - A production-only service worker (`public/sw.js`) that pre-caches the shell, keeps assets up to date, and serves a friendly offline fallback page when the network is unavailable.
+- Scoreboard and news responses are cached in local storage so returning visitors can see the most recent data instantly, even before the network responds.
+
+## Offline behaviour
+
+- Navigation requests fall back to `/offline`, which explains the offline state and lets visitors retry once they regain connectivity.
+- The scoreboard and news panels hydrate from the last successful response in `localStorage`. When a fetch fails, the UI displays the cached content alongside an “Offline” badge so users know they are viewing saved data.
+- Successful fetches notify the service worker (and use `cache: "default"`) so Workbox can update its runtime caches for the next offline session.
 
 ### Building and testing the PWA locally
 
