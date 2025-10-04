@@ -36,6 +36,9 @@ importers:
       autoprefixer:
         specifier: 10.4.20
         version: 10.4.20(postcss@8.4.45)
+      babel-loader:
+        specifier: ^8.4.1
+        version: 8.4.1(@babel/core@7.28.4)(webpack@5.102.0)
       eslint:
         specifier: 8.57.1
         version: 8.57.1
