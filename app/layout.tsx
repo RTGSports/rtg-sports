@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
+import type { ReactNode } from "react";
 import { Archivo, Inter, Rajdhani } from "next/font/google";
 import "./globals.css";
-import ServiceWorkerRegistration from "@/components/pwa/service-worker-registration";
+import PWAServiceWorker from "@/components/pwa-service-worker";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 const archivo = Archivo({
@@ -18,7 +19,7 @@ const rajdhani = Rajdhani({
 export const metadata: Metadata = {
   title: "Raising the Game Scores",
   description: "Live scores across the WNBA, NWSL, and PWHL in one place.",
-   manifest: "/manifest.webmanifest",
+  manifest: "/manifest.webmanifest",
   themeColor: "#0b0e19",
   icons: {
     icon: "/icons/icon-192x192.png",
@@ -32,14 +33,14 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className="bg-background text-white">
       <body
         className={`${inter.variable} ${archivo.variable} ${rajdhani.variable} font-sans bg-background text-white antialiased`}
       >
+        <PWAServiceWorker />
         {children}
-        <ServiceWorkerRegistration />
       </body>
     </html>
   );
