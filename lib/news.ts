@@ -118,33 +118,33 @@ export async function fetchLeagueNews(league: SupportedLeague): Promise<Normaliz
         ? payload.headlines
         : [];
 
-    return rawArticles
-      .map((article, index) => {
-        const url = extractUrl(article);
-        if (!url) {
-          return null;
-        }
+    return rawArticles.flatMap((article, index) => {
+      const url = extractUrl(article);
+      if (!url) {
+        return [];
+      }
 
-        const title = cleanText(
-          article.headline ?? article.title ?? article.name ?? article.shortHeadline ?? article.summary ?? url,
-        );
-        const summary = cleanText(article.description ?? article.summary ?? article.subtitle);
-        const publishedAt = parseDate(
-          article.published ?? article.publishedAt ?? article.lastModified ?? article.updated ?? article.created ?? article.displayDate,
-        );
-        const author = normalizeByline(article.byline);
+      const title = cleanText(
+        article.headline ?? article.title ?? article.name ?? article.shortHeadline ?? article.summary ?? url,
+      );
+      const summary = cleanText(article.description ?? article.summary ?? article.subtitle);
+      const publishedAt = parseDate(
+        article.published ?? article.publishedAt ?? article.lastModified ?? article.updated ?? article.created ?? article.displayDate,
+      );
+      const author = normalizeByline(article.byline);
 
-        return {
-          id: articleId(article, url, league, index),
-          title: title || url,
-          summary,
-          league,
-          publishedAt,
-          author,
-          url,
-        } satisfies NormalizedNewsArticle;
-      })
-      .filter((article): article is NormalizedNewsArticle => Boolean(article));
+      const normalized: NormalizedNewsArticle = {
+        id: articleId(article, url, league, index),
+        title: title || url,
+        summary,
+        league,
+        publishedAt,
+        author,
+        url,
+      };
+
+      return [normalized];
+    });
   } catch (error) {
     console.error(`Failed to load ${league.toUpperCase()} news`, error);
     return [];
