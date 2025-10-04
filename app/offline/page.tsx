@@ -1,12 +1,6 @@
-import type { Metadata } from "next";
+"use client";
 
 export const dynamic = "error";
-
-export function generateMetadata(): Metadata {
-  return {
-    title: "Offline | Raising the Game Scores",
-  };
-}
 
 export default function OfflinePage() {
   const handleRetry = () => {
