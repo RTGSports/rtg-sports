@@ -26,8 +26,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build project
-        run: pnpm build
+      - name: Hydrate Vercel project settings
+        run: pnpm dlx vercel@latest pull --yes --environment=production --token ${{ secrets.VERCEL_TOKEN }}
+
+      - name: Build with Vercel CLI
+        run: pnpm dlx vercel@latest build --prod --token ${{ secrets.VERCEL_TOKEN }}
 
       - name: Deploy to Vercel
         uses: vercel/action@v3
