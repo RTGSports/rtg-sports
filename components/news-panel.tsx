@@ -1,38 +1,80 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { NormalizedNewsArticle } from "@/lib/news";
+import { getStoredValue, setStoredValue } from "@/lib/client-storage";
 
 interface NewsResponse {
   articles: NormalizedNewsArticle[];
   refreshInterval: number;
 }
 
+const NEWS_STORAGE_KEY = "rtg-news";
+
+function postServiceWorkerMessage(message: unknown) {
+  if (
+    typeof navigator === "undefined" ||
+    !("serviceWorker" in navigator) ||
+    !navigator.serviceWorker?.controller
+  ) {
+    return;
+  }
+
+  try {
+    navigator.serviceWorker.controller.postMessage(message);
+  } catch {
+    // Ignore postMessage failures in unsupported browsers.
+  }
+}
+
 export function NewsPanel() {
-  const [articles, setArticles] = useState<NormalizedNewsArticle[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+  const initialNewsRef = useRef<NewsResponse | null | undefined>(undefined);
+  const resolveInitialNews = () => {
+    if (initialNewsRef.current === undefined) {
+      initialNewsRef.current = getStoredValue<NewsResponse | null>(
+        NEWS_STORAGE_KEY,
+        null
+      );
+    }
+
+    return initialNewsRef.current ?? null;
+  };
+
+  const [articles, setArticles] = useState<NormalizedNewsArticle[]>(() => {
+    const cached = resolveInitialNews();
+    return Array.isArray(cached?.articles) ? cached.articles : [];
+  });
+  const [loading, setLoading] = useState<boolean>(() => resolveInitialNews() === null);
   const [error, setError] = useState<string | null>(null);
-  const [refreshInterval, setRefreshInterval] = useState<number | null>(null);
+  const [refreshInterval, setRefreshInterval] = useState<number | null>(() =>
+    resolveInitialNews()?.refreshInterval ?? null
+  );
+  const [cacheNotice, setCacheNotice] = useState<string | null>(null);
+  const [isUsingCache, setIsUsingCache] = useState(false);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const dialogRef = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => {
-    let mounted = true;
-    const controller = new AbortController();
-
-    async function loadNews(options: { background?: boolean } = {}) {
-      const { background = false } = options;
+  const loadNews = useCallback(
+    async (
+      options: { background?: boolean; signal?: AbortSignal } = {}
+    ) => {
+      const { background = false, signal } = options;
+      const cachedPayload = getStoredValue<NewsResponse | null>(
+        NEWS_STORAGE_KEY,
+        null
+      );
 
       if (!background) {
-        setLoading(true);
         setError(null);
+        setCacheNotice(null);
+        setLoading(!cachedPayload);
       }
 
       try {
         const response = await fetch("/api/news", {
-          cache: "no-store",
-          signal: controller.signal,
+          cache: "default",
+          signal,
         });
 
         if (!response.ok) {
@@ -41,35 +83,75 @@ export function NewsPanel() {
 
         const payload: NewsResponse = await response.json();
 
-        if (!mounted) {
-          return;
-        }
-
+        setStoredValue(NEWS_STORAGE_KEY, payload);
         setArticles(Array.isArray(payload.articles) ? payload.articles : []);
         setRefreshInterval(payload.refreshInterval ?? null);
         setError(null);
+        setCacheNotice(null);
+        setIsUsingCache(false);
+
+        postServiceWorkerMessage({
+          type: "RTG_NEWS_UPDATE",
+          payload,
+        });
       } catch (err) {
-        if (!mounted || (err as Error).name === "AbortError") {
+        if ((err as Error).name === "AbortError") {
           return;
         }
 
-        setError("Unable to load the latest headlines. Please try again soon.");
+        const fallbackPayload =
+          cachedPayload ??
+          getStoredValue<NewsResponse | null>(NEWS_STORAGE_KEY, null);
+
+        if (fallbackPayload) {
+          setArticles(
+            Array.isArray(fallbackPayload.articles)
+              ? fallbackPayload.articles
+              : []
+          );
+          setRefreshInterval((current) =>
+            fallbackPayload.refreshInterval ?? current
+          );
+          setError(null);
+          setCacheNotice("You’re offline. Showing saved headlines.");
+          setIsUsingCache(true);
+        } else {
+          setError("Unable to load the latest headlines. Please try again soon.");
+          setCacheNotice(null);
+        }
       } finally {
-        if (mounted) {
+        if (!background) {
           setLoading(false);
         }
       }
+    },
+    []
+  );
+
+  useEffect(() => {
+    const cached = getStoredValue<NewsResponse | null>(NEWS_STORAGE_KEY, null);
+
+    if (cached) {
+      setArticles(Array.isArray(cached.articles) ? cached.articles : []);
+      setRefreshInterval(cached.refreshInterval ?? null);
+      setLoading(false);
+    } else {
+      setArticles([]);
+      setRefreshInterval(null);
+      setLoading(true);
     }
 
-    loadNews().catch(() => {
-      // handled in loadNews
+    setError(null);
+    setCacheNotice(null);
+    setIsUsingCache(false);
+
+    const controller = new AbortController();
+    loadNews({ background: false, signal: controller.signal }).catch(() => {
+      /* handled in loadNews */
     });
 
-    return () => {
-      mounted = false;
-      controller.abort();
-    };
-  }, []);
+    return () => controller.abort();
+  }, [loadNews]);
 
   useEffect(() => {
     if (!refreshInterval || refreshInterval <= 0) {
@@ -77,28 +159,13 @@ export function NewsPanel() {
     }
 
     const id = window.setInterval(() => {
-      loadLatest().catch(() => {
-        // handled in loadLatest
+      loadNews({ background: true }).catch(() => {
+        /* handled in loadNews */
       });
     }, refreshInterval * 1000);
 
-    async function loadLatest() {
-      try {
-        const response = await fetch("/api/news", { cache: "no-store" });
-        if (!response.ok) {
-          throw new Error(`News refresh failed: ${response.status}`);
-        }
-
-        const payload: NewsResponse = await response.json();
-        setArticles(Array.isArray(payload.articles) ? payload.articles : []);
-        setRefreshInterval(payload.refreshInterval ?? refreshInterval);
-      } catch (error) {
-        console.error(error);
-      }
-    }
-
     return () => window.clearInterval(id);
-  }, [refreshInterval]);
+  }, [loadNews, refreshInterval]);
 
   const groupedArticles = useMemo(() => {
     return articles.reduce<Record<string, NormalizedNewsArticle[]>>((acc, article) => {
@@ -210,6 +277,15 @@ export function NewsPanel() {
   const renderBody = () => {
     return (
       <>
+        {cacheNotice && (
+          <div
+            role="status"
+            className="flex items-center gap-2 rounded-xl border border-amber-300/40 bg-amber-500/10 px-4 py-2 text-xs text-amber-100"
+          >
+            <span className="inline-flex h-2 w-2 rounded-full bg-amber-200" aria-hidden />
+            {cacheNotice}
+          </div>
+        )}
         {error && (
           <div className="rounded-xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">
             {error}
@@ -245,10 +321,16 @@ export function NewsPanel() {
   return (
     <section className="space-y-4">
       <header className="flex items-baseline justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-semibold">
-            Latest Headlines
-          </h2>
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-semibold">Latest Headlines</h2>
+            {isUsingCache && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-amber-300/40 bg-amber-400/10 px-2 py-0.5 text-xs text-amber-100">
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-200" aria-hidden />
+                Offline
+              </span>
+            )}
+          </div>
           <span className="text-xs uppercase tracking-[0.35em] text-muted">News Desk</span>
         </div>
         <button
@@ -281,10 +363,18 @@ export function NewsPanel() {
             tabIndex={-1}
           >
             <div className="mb-4 flex items-start justify-between gap-4">
-              <div>
-                <h2 id="news-panel-dialog-title" className="text-lg font-semibold">
-                  Latest Headlines
-                </h2>
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center gap-2">
+                  <h2 id="news-panel-dialog-title" className="text-lg font-semibold">
+                    Latest Headlines
+                  </h2>
+                  {isUsingCache && (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-amber-300/40 bg-amber-400/10 px-2 py-0.5 text-[0.65rem] uppercase tracking-[0.35em] text-amber-100">
+                      <span className="h-1.5 w-1.5 rounded-full bg-amber-200" aria-hidden />
+                      Offline
+                    </span>
+                  )}
+                </div>
                 <span className="text-xs uppercase tracking-[0.35em] text-muted">News Desk</span>
               </div>
               <button

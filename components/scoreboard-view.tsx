@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type CSSProperties,
 } from "react";
@@ -13,6 +14,7 @@ import {
   type LeagueBrand,
   type LeagueKey,
 } from "@/lib/leagues";
+import { getStoredValue, setStoredValue } from "@/lib/client-storage";
 
 interface ScoreboardResponse {
   league: LeagueKey;
@@ -54,13 +56,57 @@ interface ScoreboardViewProps {
   initialLeague?: LeagueKey;
 }
 
+const SCOREBOARD_STORAGE_PREFIX = "rtg-scoreboard";
+
+function getScoreboardStorageKey(league: LeagueKey) {
+  return `${SCOREBOARD_STORAGE_PREFIX}:${league}`;
+}
+
+function postServiceWorkerMessage(message: unknown) {
+  if (
+    typeof navigator === "undefined" ||
+    !("serviceWorker" in navigator) ||
+    !navigator.serviceWorker?.controller
+  ) {
+    return;
+  }
+
+  try {
+    navigator.serviceWorker.controller.postMessage(message);
+  } catch {
+    // Ignore postMessage failures in unsupported browsers.
+  }
+}
+
 export function ScoreboardView({ initialLeague = DEFAULT_LEAGUE }: ScoreboardViewProps) {
+  const initialScoreboardRef = useRef<ScoreboardResponse | null | undefined>(
+    undefined
+  );
+  const resolveInitialScoreboard = () => {
+    if (initialScoreboardRef.current === undefined) {
+      initialScoreboardRef.current = getStoredValue<ScoreboardResponse | null>(
+        getScoreboardStorageKey(initialLeague),
+        null
+      );
+    }
+
+    return initialScoreboardRef.current ?? null;
+  };
+
   const [selectedLeague, setSelectedLeague] = useState<LeagueKey>(initialLeague);
-  const [data, setData] = useState<ScoreboardResponse | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [data, setData] = useState<ScoreboardResponse | null>(() =>
+    resolveInitialScoreboard()
+  );
+  const [loading, setLoading] = useState<boolean>(
+    () => resolveInitialScoreboard() === null
+  );
   const [error, setError] = useState<string | null>(null);
-  const [refreshInterval, setRefreshInterval] = useState<number>(180);
+  const [refreshInterval, setRefreshInterval] = useState<number>(
+    () => resolveInitialScoreboard()?.refreshInterval ?? 180
+  );
   const [isBackgroundRefresh, setIsBackgroundRefresh] = useState(false);
+  const [cacheNotice, setCacheNotice] = useState<string | null>(null);
+  const [isUsingCache, setIsUsingCache] = useState(false);
   const activeBrand = LEAGUES[selectedLeague].brand;
 
   const leagues = useMemo(
@@ -79,16 +125,23 @@ export function ScoreboardView({ initialLeague = DEFAULT_LEAGUE }: ScoreboardVie
     ) => {
       const { background = false, signal } = options;
 
+      const cacheKey = getScoreboardStorageKey(league);
+      const cachedPayload = getStoredValue<ScoreboardResponse | null>(
+        cacheKey,
+        null
+      );
+
       if (!background) {
-        setLoading(true);
         setError(null);
+        setCacheNotice(null);
+        setLoading(!cachedPayload);
       } else {
         setIsBackgroundRefresh(true);
       }
 
       try {
         const response = await fetch(`/api/scoreboard?league=${league}`, {
-          cache: "no-store",
+          cache: "default",
           signal,
         });
 
@@ -98,15 +151,39 @@ export function ScoreboardView({ initialLeague = DEFAULT_LEAGUE }: ScoreboardVie
 
         const payload: ScoreboardResponse = await response.json();
 
+        setStoredValue(cacheKey, payload);
         setData(payload);
         setRefreshInterval(payload.refreshInterval ?? 180);
         setError(null);
+        setCacheNotice(null);
+        setIsUsingCache(false);
+
+        postServiceWorkerMessage({
+          type: "RTG_SCOREBOARD_UPDATE",
+          league,
+          payload,
+        });
       } catch (err) {
         if ((err as Error).name === "AbortError") {
           return;
         }
 
-        setError("Unable to load the latest scores. Please try again in a moment.");
+        const fallbackPayload =
+          cachedPayload ??
+          getStoredValue<ScoreboardResponse | null>(cacheKey, null);
+
+        if (fallbackPayload) {
+          setData(fallbackPayload);
+          setRefreshInterval((current) =>
+            fallbackPayload.refreshInterval ?? current
+          );
+          setError(null);
+          setCacheNotice("You’re offline. Showing saved scores.");
+          setIsUsingCache(true);
+        } else {
+          setError("Unable to load the latest scores. Please try again in a moment.");
+          setCacheNotice(null);
+        }
       } finally {
         if (!background) {
           setLoading(false);
@@ -118,6 +195,26 @@ export function ScoreboardView({ initialLeague = DEFAULT_LEAGUE }: ScoreboardVie
   );
 
   useEffect(() => {
+    const cached = getStoredValue<ScoreboardResponse | null>(
+      getScoreboardStorageKey(selectedLeague),
+      null
+    );
+
+    if (cached) {
+      setData(cached);
+      setRefreshInterval(cached.refreshInterval ?? 180);
+      setLoading(false);
+    } else {
+      setData(null);
+      setLoading(true);
+      setRefreshInterval(180);
+    }
+
+    setError(null);
+    setCacheNotice(null);
+    setIsUsingCache(false);
+    setIsBackgroundRefresh(false);
+
     const controller = new AbortController();
     loadScores(selectedLeague, { background: false, signal: controller.signal });
 
@@ -243,14 +340,21 @@ export function ScoreboardView({ initialLeague = DEFAULT_LEAGUE }: ScoreboardVie
             </div>
           </nav>
           <div
-            className="text-xs sm:hidden"
+            className="flex flex-wrap items-center gap-2 text-xs sm:hidden"
             style={{ color: withOpacity(activeBrand.mutedColor, 0.85) }}
             aria-live="polite"
           >
+            {isUsingCache && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-amber-300/40 bg-amber-400/10 px-2 py-0.5 text-amber-100">
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-200" aria-hidden />
+                Offline
+              </span>
+            )}
             {isBackgroundRefresh && (
               <span
-                className="mr-2 inline-flex h-2 w-2 animate-ping rounded-full"
+                className="inline-flex h-2 w-2 animate-ping rounded-full"
                 style={{ backgroundColor: activeBrand.primaryColor }}
+                aria-hidden
               />
             )}
             {data?.games && (
@@ -261,14 +365,21 @@ export function ScoreboardView({ initialLeague = DEFAULT_LEAGUE }: ScoreboardVie
           </div>
         </div>
         <div
-          className="hidden text-xs sm:block"
+          className="hidden items-center gap-2 text-xs sm:flex"
           style={{ color: withOpacity(activeBrand.mutedColor, 0.85) }}
           aria-live="polite"
         >
+          {isUsingCache && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-amber-300/40 bg-amber-400/10 px-2 py-0.5 text-amber-100">
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-200" aria-hidden />
+              Offline
+            </span>
+          )}
           {isBackgroundRefresh && (
             <span
-              className="mr-2 inline-flex h-2 w-2 animate-ping rounded-full"
+              className="inline-flex h-2 w-2 animate-ping rounded-full"
               style={{ backgroundColor: activeBrand.primaryColor }}
+              aria-hidden
             />
           )}
           {data?.games && (
@@ -278,6 +389,16 @@ export function ScoreboardView({ initialLeague = DEFAULT_LEAGUE }: ScoreboardVie
           )}
         </div>
       </div>
+
+      {cacheNotice && (
+        <div
+          role="status"
+          className="flex items-center gap-2 rounded-xl border border-amber-300/40 bg-amber-500/10 px-4 py-2 text-xs text-amber-100"
+        >
+          <span className="inline-flex h-2 w-2 rounded-full bg-amber-200" aria-hidden />
+          {cacheNotice}
+        </div>
+      )}
 
       {error && (
         <div className="rounded-xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">
