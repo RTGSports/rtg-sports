@@ -31,7 +31,9 @@ const runtimeCaching: RuntimeCaching[] = [
   },
   {
     urlPattern: ({ request }) =>
-      ["style", "script", "worker", "font", "image"].includes(request.destination),
+      Boolean(
+        request && ["style", "script", "worker", "font", "image"].includes(request.destination)
+      ),
     handler: "CacheFirst",
     options: {
       cacheName: "static-assets",
@@ -45,7 +47,7 @@ const runtimeCaching: RuntimeCaching[] = [
     },
   },
   {
-    urlPattern: ({ request }) => request.mode === "navigate",
+    urlPattern: ({ request }) => request?.mode === "navigate",
     handler: "NetworkFirst",
     options: {
       cacheName: "documents",
